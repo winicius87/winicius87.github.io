@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Sudoku Solver</title>
+<script src="http://code.jquery.com/jquery-1.11.3.min.js"></script>
+<style>
+#sudokuProcess{color: rgb(90,255,0); background: black; font-size:1.5em;}
+.otherColor{background: rgb(90,255,0);}
+</style>
+</head>
+<body>
+
+<script>
+
+$(document).ready(function(){
+var DEBUG = 0;
+
+function intersect2Sets(set1, set2){
+    var complementHash = {};
+    for(var k in set1){
+        if(set2.hasOwnProperty(k)){complementHash[k]=1;}
+    }
+    return complementHash;
+}
+
+//input: row, column
+//result: return the intersection of the complement of the row, column, and 3x3 square
+//it contains the possible values that can fit into the cell in the row, col
+function getCrossHatch(row, col){
+    var rowComplement = getRowComplement(row);
+    var colComplement = getColComplement(col);
+    var _3x3Complement = get3x3SquareComplement(row, col);
+
+    var crossHatch = intersect2Sets(rowComplement, colComplement);
+    crossHatch = intersect2Sets(crossHatch, _3x3Complement);    //contains values that can be a possible match for the row, col.
+    var range = get3x3Range(row, col);
+    //from the possible values in crossHatch
+    //see how the rows and columns resolve conflicts
+    //for each value in crossHatch we will count the amount of conflicts we find.
+    //a conflict of 8 is a guaranteed match for the 3x3 cell
+    var conflicts = {};
+    var nonconflicts = {};
+    var _3x3 = get3x3Square(row, col);
+    var sumconflict = 0;
+    var tempcomplement;
+    for(var k in crossHatch){
+        //get a clean 3x3 square
+        _3x3 = get3x3Square(row, col);
+        if(DEBUG == 1){
+            log("Checking possible value "+k+" for "+row+"x"+col);
+        }
+        for(var i=range['rowstart']; i<=range['rowend']; ++i){
+            if(i==row){continue;}
+            if(DEBUG == 1){
+                log("Checking row "+i+" for value "+k);
+            }
+            tempcomplement = getRowComplement(i);
+            //if hasOwnProperty returns false then the number is in the row.
+            //this is because the way the complement works, think of it like
+            //a double negative
+            if(tempcomplement.hasOwnProperty(k) === false){
+                //set row in _3x3 with an 'x' to mark that it is a conflict
+                _3x3[(i-1)%3][0]='x';
+                _3x3[(i-1)%3][1]='x';
+                _3x3[(i-1)%3][2]='x';
+            }      
+        }
+        for(var j=range['colstart']; j<=range['colend']; ++j){
+            if(j==col){continue;}
+            if(DEBUG == 1){
+                log("Checking column "+j+" for value "+k);
+            }
+            tempcomplement = getColComplement(j);
+            //if hasOwnProperty returns false then the number is in the row.
+            //this is because the way the complement works, think of it like
+            //a double negative
+            if(tempcomplement.hasOwnProperty(k) === false){
+                //set row in _3x3 with an 'x' to mark that it is a conflict
+                _3x3[0][(j-1)%3]='x';
+                _3x3[1][(j-1)%3]='x';
+                _3x3[2][(j-1)%3]='x';
+            }
+            
+        }
+        sumconflict = print2DArray(_3x3);
+        //we found the value for the cell
+        if(sumconflict == 8){
+            //put value in cell
+            $('#'+row+'x'+col).html(k);
+            return true;
+        }
+    }
+    return false;
+}
+
+function getEmptySudokuCells(){
+    var emptySudokuCells = {};
+    for(var i=1; i<=9; ++i){
+    	for(var j=1; j<=9; ++j){
+            if($('#'+i+'x'+j).html() == ''){
+                emptySudokuCells[i+"x"+j] = 1;
+            }
+    	}
+    }
+
+    if(DEBUG==1){
+        for(var k in emptySudokuCells){
+            log(k);
+        }
+    }
+    return emptySudokuCells;
+}
+
+//this function solves the sudoku puzzle that is on the html page
+function solve(){
+    var emptySudokuCells = getEmptySudokuCells();
+    //iterate through all the cells and find the crossHatch
+    //Object.keys(emptySudokuCells).length
+    var i = 0;
+    while(i<81){
+        ++i;
+        for(var k in emptySudokuCells){
+            log(k);
+            var tempCell = k.split('x');
+            var row = tempCell[0];
+            var col = tempCell[1];
+            if(DEBUG==1){
+                log("Getting CrossHatch at "+row+"x"+col+".");
+            }
+            var isSolutionForCellFound = getCrossHatch(row, col);
+            if(isSolutionForCellFound){delete emptySudokuCells[row+'x'+col];}
+        }
+    }
+}
+
+function print2DArray(_3x3){
+    var countConflicts = 0;
+    if(DEBUG == 1){
+        log("Printing _3x3 Square with x marks.");
+    }
+    for(var i=0; i<_3x3.length;++i){
+        for(var j=0; j<_3x3.length;++j){
+            if(DEBUG == 1){
+                log(_3x3[i][j]);
+            }
+            if(_3x3[i][j]>=1 && _3x3[i][j]<=9 || _3x3[i][j]=='x' ){++countConflicts;}
+        }
+    }
+    if(DEBUG == 1){
+        log("There are "+countConflicts+" conflicts.");
+    }
+    return countConflicts;
+}
+
+function Create2DArray(rows) {
+  var arr = [];
+
+  for (var i=0;i<rows;i++) {
+     arr[i] = [];
+  }
+
+  return arr;
+}
+
+//returns 3x3 square for row, col
+function get3x3Square(row, col){
+    var range = get3x3Range(row, col);
+    var trow;
+    var tcol;
+    var _3x3 = Create2DArray(3);
+    for(var i=(range['rowstart']-1)%3; i<=(range['rowend']-1)%3; ++i){
+        for(var j=(range['colstart']-1)%3; j<=(range['colend']-1)%3; ++j){
+            trow = range['rowstart']+i;
+            tcol = range['colstart']+j;
+
+            var celltemp = "#"+trow+"x"+tcol;
+            //log(celltemp);
+            var cellval = $(celltemp).html();
+            if(DEBUG == 1){
+                log("Filling in 2D array location "+i+"x"+j+" with "+cellval+ " location "+celltemp);
+            }
+            _3x3[i][j] = cellval;
+        }
+    }
+    return _3x3;
+}
+
+function get3x3Range(row, col){
+    var range = {
+        "rowstart" : 0,
+        "rowend" : 0,
+        "colstart" : 0,
+        "colend" : 0,
+    }
+    if(row >= 1 && row <= 3){range['rowstart']=1;range['rowend']=3;}
+    else if(row >= 4 && row <= 6){range['rowstart']=4;range['rowend']=6;}
+    else if(row >= 7 && row <= 9){range['rowstart']=7;range['rowend']=9;}
+
+    if(col >= 1 && col <= 3){range['colstart']=1;range['colend']=3;}
+    else if(col >= 4 && col <= 6){range['colstart']=4;range['colend']=6;}
+    else if(col >= 7 && col <= 9){range['colstart']=7;range['colend']=9;}
+
+    return range;
+}
+
+//get3x3SquareComplement(2,5);
+function get3x3SquareComplement(row,col){
+    var complementHash = {};    //this is new Object();
+    for(var i=1; i<=9; ++i){
+        complementHash[i] = 1;
+    }
+    var range = get3x3Range(row,col);
+    for(var i=range['rowstart']; i<=range['rowend']; ++i){
+        for(var j=range['colstart']; j<=range['colend']; ++j){
+            var celltemp = "#"+i+"x"+j;
+            //log(celltemp);
+            var cellval = $(celltemp).html()
+            delete complementHash[cellval];
+            //log(cellval);
+        }
+    }
+    if(DEBUG == 1){
+        log("Returning get3x3SquareComplement("+row+","+col+");");
+        for(var k in complementHash){
+            log(k);
+        }
+    }
+    return complementHash;
+}
+
+//command use: getColComplement(1);
+function getColComplement(coly){
+    var complementHash = {};    //this is new Object();
+    for(var i=1; i<=9; ++i){
+        complementHash[i] = 1;
+    }
+    for(var i=1; i<=9; ++i){
+        var celltemp = "#"+i+"x"+coly;
+        //log(celltemp);
+        var cellval = $(celltemp).html()
+        delete complementHash[cellval];
+        //log(cellval);
+    }
+    if(DEBUG == 1){
+        log("Returning getColComplement("+coly+");");
+        for(var k in complementHash){
+            log(k);
+        }
+    }
+    return complementHash;
+}
+
+//command use: getRowComplement(1);
+function getRowComplement(rowx){
+    var complementHash = {};    //this is new Object();
+    for(var i=1; i<=9; ++i){
+        complementHash[i] = 1;
+    }
+    for(var i=1; i<=9; ++i){
+        var celltemp = "#"+rowx+"x"+i;
+        //log(celltemp);
+        var cellval = $(celltemp).html();
+        delete complementHash[cellval];
+        //log(cellval);
+    }
+    if(DEBUG == 1){
+        log("Returning getRowComplement("+rowx+");");
+        for(var k in complementHash){
+            log(k);
+        }
+    }
+    return complementHash;
+}
+
+
+$('textarea#commandPrompt').keydown(function(event) {
+    //alert('abc');
+    if(event.which == 13) {
+        var command = $('textarea#commandPrompt').val();
+        $('textarea#commandPrompt').val("");
+        clog(command);
+        eval(command);
+        return false;
+     }
+});
+
+var loadDefaultSudoku = function() {
+    if($('textarea#sudokuInput').val() == ''){
+        $('textarea#sudokuInput').val("--25--6--\n-3-----4-\n8-6-7--1-\n--3--6---\n5--1-9--8\n---3--4--\n-4--9-7-1\n-7-----8-\n--8--52--");
+    }
+    loadSudokuFromTextToDisplay();
+}
+
+$('input#submit').click(loadDefaultSudoku);
+$('input#solve').click(solve);
+/* Sudoku Sample
+--5------
+-982---1-
+-7---8--9
+7--95----
+3--1-6--2
+----83--7
+1--7---8-
+-2---539-
+------2--
+
+*/
+loadDefaultSudoku();
+
+});
+function log(templog){
+    var templ = $('textarea#sudokuProcess').val();
+    $('textarea#sudokuProcess').val(templ+"\n"+">>>"+templog);
+
+    var textarea = document.getElementById('sudokuProcess');
+    textarea.scrollTop = textarea.scrollHeight;
+}
+
+function clog(templog){
+    var templ = $('textarea#sudokuProcess').val();
+    $('textarea#sudokuProcess').val(templ+"\n"+templog);
+
+    var textarea = document.getElementById('sudokuProcess');
+    textarea.scrollTop = textarea.scrollHeight;
+}
+
+var loadSudokuFromTextToDisplay = function(){
+    var text = $('textarea#sudokuInput').val();
+    //alert(text);
+    var rows = text.split('\n');
+    //alert(rows[2]);
+    var tempRowSplit= "";
+    var temp = '';
+    for(var i=0; i<rows.length; ++i){
+        tempRowSplit = rows[i].split("");
+        //alert(tempRowSplit);
+    	for(var j=0; j<tempRowSplit.length; ++j){
+    	    temp = (i+1)+"x"+(j+1);
+    	    //alert(temp);
+            if(tempRowSplit[j] >= 1 && tempRowSplit[j] <= 9)
+    	    	$('#'+temp).html(tempRowSplit[j]);
+            else
+                $('#'+temp).html('');
+    	}
+//alert(rows[i]);
+    }
+    clog("Sudoku Puzzle Loaded on to the screen.");
+}
+
+function loadSudoku(temp){
+    if(temp == 101){
+        $('textarea#sudokuInput').val("6-7-4---1\n------37-\n-1-7---42\n-5-4----9\n12--9--63\n9----6-2-\n26---7-3-\n-35------\n8---2-6-5");
+    } else if(temp == 102){
+        $('textarea#sudokuInput').val("54-9-2-6-\n---1---59\n-2-57-8-4\n-----478-\n--37-14--\n-762-----\n3-5-19-7-\n19---7---\n-6-8-5-91");
+    } else if(temp == 103){
+        $('textarea#sudokuInput').val("-1-4-2---\n3---1----\n--96-8--2\n--3-71-84\n28-943-65\n14-28-3--\n6--3-95--\n----5---8\n---8-4-2-");
+    } else if(temp == 104){
+        $('textarea#sudokuInput').val("--56--7--\n-178-4--2\n--3-----5\n9-4--7---\n1-83-52-7\n---9--3-1\n3-----4--\n5--1-382-\n--9--65--");
+    } else if(temp == 105){
+        $('textarea#sudokuInput').val("-75---1--\n3--7-2-6-\n--4--1--2\n46--9--8-\n9-2-7-3-6\n-5--2--14\n5--3--6--\n-2-9-4--8\n--7---49-");
+    } else if(temp == 106){
+        $('textarea#sudokuInput').val("1--5-4-9-\n948-7----\n2-39----7\n3-96---4-\n-1-----6-\n-6---38-1\n8----21-9\n----3-685\n-9-1-8--4");
+    } else if(temp == 107){
+        $('textarea#sudokuInput').val("-9-8---53\n----978--\n17--63-29\n5---2--8-\n8-3---9-2\n-1--8---6\n72-93--48\n--524----\n63---8-9-");
+    } else if(temp == 108){
+        $('textarea#sudokuInput').val("7--93-1--\n-21-7-539\n-59-21--7\n-3---94--\n---------\n--64---8-\n4--18-29-\n168-9-37-\n--2-47--8");
+    }
+
+    if(temp == 201){
+        $('textarea#sudokuInput').val("----85---\n1-37-----\n-----1687\n-5--7--1-\n4-9---5-8\n-3--9--6-\n5246-----\n-----78-4\n---14----");
+    } else if(temp == 202){
+        $('textarea#sudokuInput').val("-6-9--5-3\n-89--3-14\n----7----\n--26----5\n-5-2-8-7-\n6----12--\n----8----\n49-7--13-\n1-6--9-5-");
+    } else if(temp == 203){
+        $('textarea#sudokuInput').val("-----28--\n389------\n---834--5\n5-8---43-\n9-6---5-8\n-43---7-2\n8--695---\n------259\n--52-----");
+    } else if(temp == 204){
+        $('textarea#sudokuInput').val("1-----35-\n-----2-47\n8---1---9\n---635-9-\n2---4---5\n-6-298---\n9---5---1\n35-8-----\n-24-----3");
+    } else if(temp == 205){
+        $('textarea#sudokuInput').val("4---6----\n29---5-4-\n-7841-3--\n--9-8-46-\n----7----\n-24-5-7--\n--3-2751-\n-5-1---93\n----9---8");
+    } else if(temp == 206){
+        $('textarea#sudokuInput').val("---3-98-4\n9---58---\n--61-4---\n--9-----8\n46-----73\n1-----2--\n---6-73--\n---81---9\n6-89-3---");
+    } else if(temp == 207){
+        $('textarea#sudokuInput').val("-5--24---\n---83----\n86-5---9-\n1-5--896-\n-9-----8-\n-789--1-2\n-2---5-71\n----62---\n---48--3-");
+    } else if(temp == 208){
+        $('textarea#sudokuInput').val("628------\n---7--6-1\n--98---3-\n2-748---6\n48-----72\n3---275-8\n-4---58--\n8-2--9---\n------723");
+    }
+
+    if(temp == 301){
+        $('textarea#sudokuInput').val("-5-----7-\n-8-9-----\n--7521---\n5----29-8\n--6---2--\n1-38----7\n---7561--\n-----4-6-\n-4-----9-");
+    } else if(temp == 302){
+        $('textarea#sudokuInput').val("---7-5--8\n34-----9-\n--24--3--\n874-----9\n---9-7---\n6-----872\n--9--35--\n-1-----34\n4--5-9---");
+    } else if(temp == 303){
+        $('textarea#sudokuInput').val("-5-6---9-\n1--4-72--\n---53----\n--23---5-\n-37---12-\n-9---56--\n----58---\n--87-6--2\n-4---3-8-");
+    } else if(temp == 304){
+        $('textarea#sudokuInput').val("-5--1----\n--62-----\n-71--4239\n3-5---6--\n----4----\n--4---8-1\n6395--48-\n-----81--\n----9--2-");
+    } else if(temp == 305){
+        $('textarea#sudokuInput').val("-12--67--\n-----8--5\n-4-71--2-\n--6---85-\n--3---6--\n-74---9--\n-3--47-6-\n6--1-----\n--78--23-");
+    } else if(temp == 306){
+        $('textarea#sudokuInput').val("-96-3----\n-3---21-5\n-----96--\n45-------\n8-9-5-2-7\n-------51\n--56-----\n3-49---6-\n----2-87-");
+    } else if(temp == 307){
+        $('textarea#sudokuInput').val("1--28--7-\n2----68--\n4----31--\n--8---3--\n6---1---9\n--2---4--\n--96----1\n--45----2\n-3--29--8");
+    } else if(temp == 308){
+        $('textarea#sudokuInput').val("16-92----\n-----4---\n9-4---1--\n84--5---6\n--9---5--\n3---4--78\n--5---6-2\n---2-----\n----85-47");
+    }
+
+    loadSudokuFromTextToDisplay();
+}
+</script>
+
+<style type="text/css">
+.tg  {border-collapse:collapse;border-spacing:0;}
+.tg td{font-family:Arial, sans-serif;font-size:14px;padding:10px 17px;border-style:solid;border-width:4px;overflow:hidden;word-break:normal;}
+.tg th{font-family:Arial, sans-serif;font-size:14px;font-weight:normal;padding:10px 17px;border-style:solid;border-width:1px;overflow:hidden;word-break:normal;}
+.tg .tg-oxwd{font-weight:bold;font-size:26px;vertical-align:top}
+.tg .tg-yw4l{vertical-align:top}
+.left {float: left;}
+a {display: block;}
+</style>
+<div style="clear: both;">Sudoku Solver</div>
+<form class="left">
+<textarea id="sudokuInput" rows="10" cols="16" maxlength="900" placeholder="Insert your Sudoku here.">
+</textarea>
+<br/>
+<input type="button" id="submit" value="Submit" />
+</form>
+<div class="left" style="margin-left: 10px;">
+    <div class="left" style="margin-left: 10px;">
+        <span>Easy</span>
+        <br />
+        <a href="#" onclick="loadSudoku(101);">Easy One</a>
+        <a href="#" onclick="loadSudoku(102);">Easy Two</a>
+        <a href="#" onclick="loadSudoku(103);">Easy Three</a>
+        <a href="#" onclick="loadSudoku(104);">Easy Four</a>
+        <a href="#" onclick="loadSudoku(105);">Easy Five</a>
+        <a href="#" onclick="loadSudoku(106);">Easy Six</a>
+        <a href="#" onclick="loadSudoku(107);">Easy Seven</a>
+        <a href="#" onclick="loadSudoku(108);">Easy Eight</a>
+    </div>
+    <div class="left" style="margin-left: 10px;">
+        <span>Medium</span>
+        <br />
+        <a href="#" onclick="loadSudoku(201);">Medium One</a>
+        <a href="#" onclick="loadSudoku(202);">Medium Two</a>
+        <a href="#" onclick="loadSudoku(203);">Medium Three</a>
+        <a href="#" onclick="loadSudoku(204);">Medium Four</a>
+        <a href="#" onclick="loadSudoku(205);">Medium Five</a>
+        <a href="#" onclick="loadSudoku(206);">Medium Six</a>
+        <a href="#" onclick="loadSudoku(207);">Medium Seven</a>
+        <a href="#" onclick="loadSudoku(208);">Medium Eight</a>
+    </div>
+    <div class="left" style="margin-left: 10px;">
+        <span>Hard</span>
+        <br />
+        <a href="#" onclick="loadSudoku(301);">Hard One</a>
+        <a href="#" onclick="loadSudoku(302);">Hard Two</a>
+        <a href="#" onclick="loadSudoku(303);">Hard Three</a>
+        <a href="#" onclick="loadSudoku(304);">Hard Four</a>
+        <a href="#" onclick="loadSudoku(305);">Hard Five</a>
+        <a href="#" onclick="loadSudoku(306);">Hard Six</a>
+        <a href="#" onclick="loadSudoku(307);">Hard Seven</a>
+        <a href="#" onclick="loadSudoku(308);">Hard Eight</a>
+    </div>
+</div>
+<br/>
+<table class="tg" style="clear:both;">
+  <tr>
+    <td class="tg-yw4l" id="1x1"></td>
+    <td class="tg-yw4l" id="1x2"></td>
+    <td class="tg-yw4l" id="1x3"></td>
+    <td class="tg-yw4l otherColor" id="1x4"></td>
+    <td class="tg-yw4l otherColor" id="1x5"></td>
+    <td class="tg-yw4l otherColor" id="1x6"></td>
+    <td class="tg-yw4l" id="1x7"></td>
+    <td class="tg-yw4l" id="1x8"></td>
+    <td class="tg-yw4l" id="1x9"></td>
+  </tr>
+  <tr>
+    <td class="tg-yw4l" id="2x1"></td>
+    <td class="tg-yw4l" id="2x2"></td>
+    <td class="tg-yw4l" id="2x3"></td>
+    <td class="tg-yw4l otherColor" id="2x4"></td>
+    <td class="tg-yw4l otherColor" id="2x5"></td>
+    <td class="tg-yw4l otherColor" id="2x6"></td>
+    <td class="tg-yw4l" id="2x7"></td>
+    <td class="tg-yw4l" id="2x8"></td>
+    <td class="tg-yw4l" id="2x9"></td>
+  </tr>
+  <tr>
+    <td class="tg-yw4l" id="3x1"></td>
+    <td class="tg-yw4l" id="3x2"></td>
+    <td class="tg-yw4l" id="3x3"></td>
+    <td class="tg-yw4l otherColor" id="3x4"></td>
+    <td class="tg-yw4l otherColor" id="3x5"></td>
+    <td class="tg-yw4l otherColor" id="3x6"></td>
+    <td class="tg-yw4l" id="3x7"></td>
+    <td class="tg-yw4l" id="3x8"></td>
+    <td class="tg-yw4l" id="3x9"></td>
+  </tr>
+  <tr>
+    <td class="tg-yw4l otherColor" id="4x1"></td>
+    <td class="tg-yw4l otherColor" id="4x2"></td>
+    <td class="tg-yw4l otherColor" id="4x3"></td>
+    <td class="tg-yw4l" id="4x4"></td>
+    <td class="tg-yw4l" id="4x5"></td>
+    <td class="tg-yw4l" id="4x6"></td>
+    <td class="tg-yw4l otherColor" id="4x7"></td>
+    <td class="tg-yw4l otherColor" id="4x8"></td>
+    <td class="tg-yw4l otherColor" id="4x9"></td>
+  </tr>
+  <tr>
+    <td class="tg-yw4l otherColor" id="5x1"></td>
+    <td class="tg-yw4l otherColor" id="5x2"></td>
+    <td class="tg-yw4l otherColor" id="5x3"></td>
+    <td class="tg-yw4l" id="5x4"></td>
+    <td class="tg-yw4l" id="5x5"></td>
+    <td class="tg-yw4l" id="5x6"></td>
+    <td class="tg-yw4l otherColor" id="5x7"></td>
+    <td class="tg-yw4l otherColor" id="5x8"></td>
+    <td class="tg-yw4l otherColor" id="5x9"></td>
+  </tr>
+  <tr>
+    <td class="tg-yw4l otherColor" id="6x1"></td>
+    <td class="tg-yw4l otherColor" id="6x2"></td>
+    <td class="tg-yw4l otherColor" id="6x3"></td>
+    <td class="tg-yw4l" id="6x4"></td>
+    <td class="tg-yw4l" id="6x5"></td>
+    <td class="tg-yw4l" id="6x6"></td>
+    <td class="tg-yw4l otherColor" id="6x7"></td>
+    <td class="tg-yw4l otherColor" id="6x8"></td>
+    <td class="tg-yw4l otherColor" id="6x9"></td>
+  </tr>
+  <tr>
+    <td class="tg-yw4l" id="7x1"></td>
+    <td class="tg-yw4l" id="7x2"></td>
+    <td class="tg-yw4l" id="7x3"></td>
+    <td class="tg-yw4l otherColor" id="7x4"></td>
+    <td class="tg-yw4l otherColor" id="7x5"></td>
+    <td class="tg-yw4l otherColor" id="7x6"></td>
+    <td class="tg-yw4l" id="7x7"></td>
+    <td class="tg-yw4l" id="7x8"></td>
+    <td class="tg-yw4l" id="7x9"></td>
+  </tr>
+  <tr>
+    <td class="tg-yw4l" id="8x1"></td>
+    <td class="tg-yw4l" id="8x2"></td>
+    <td class="tg-yw4l" id="8x3"></td>
+    <td class="tg-yw4l otherColor" id="8x4"></td>
+    <td class="tg-yw4l otherColor" id="8x5"></td>
+    <td class="tg-yw4l otherColor" id="8x6"></td>
+    <td class="tg-yw4l" id="8x7"></td>
+    <td class="tg-yw4l" id="8x8"></td>
+    <td class="tg-yw4l" id="8x9"></td>
+  </tr>
+  <tr>
+    <td class="tg-yw4l" id="9x1"></td>
+    <td class="tg-yw4l" id="9x2"></td>
+    <td class="tg-yw4l" id="9x3"></td>
+    <td class="tg-yw4l otherColor" id="9x4"></td>
+    <td class="tg-yw4l otherColor" id="9x5"></td>
+    <td class="tg-yw4l otherColor" id="9x6"></td>
+    <td class="tg-yw4l" id="9x7"></td>
+    <td class="tg-yw4l" id="9x8"></td>
+    <td class="tg-yw4l" id="9x9"></td>
+  </tr>
+</table>
+<br/>
+<span>Process:<span> <form>
+<input type="button" id="step" value="Step Forward" />
+<input type="button" id="solve" value="Solve" />
+<br />
+<textarea id="sudokuProcess" rows="20" cols="80" maxlength="900">Check here to see messages for solving your puzzle.</textarea>
+<textarea id="commandPrompt" rows="1" cols="80" placeholder="Enter command."></textarea>
+</form>
+
+</body>
+</html>
